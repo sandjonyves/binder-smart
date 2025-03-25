@@ -13,7 +13,7 @@ export default function HomeScreen() {
         <Image
           source={require('@/assets/images/partial-react-logo.png')}
           style={styles.reactLogo}
-        />
+        />  
       }>
       <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Welcome!</ThemedText>
@@ -32,6 +32,7 @@ export default function HomeScreen() {
             })}
           </ThemedText>{' '}
           to open developer tools.
+          vcvxxvxc dfsfsfds sdsd
         </ThemedText>
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
