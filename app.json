@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.anonymous.bindersmart"
     },
     "web": {
       "bundler": "metro",
@@ -31,14 +32,6 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
-        }
-      ],
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "Permettre à l'application d'accéder à vos photos.",
-          "savePhotosPermission": "Permettre à l'application de sauvegarder des photos.",
-          "isAccessMediaLocationEnabled": true
         }
       ]
     ],

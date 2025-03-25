@@ -6,10 +6,10 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
-  Platform
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import * as Device from 'expo-device';
+import RNFS from 'react-native-fs';
 import { Ionicons } from '@expo/vector-icons';
 
 interface FileItem {
@@ -19,59 +19,44 @@ interface FileItem {
   size?: number;
 }
 
-interface StorageInfo {
-  totalSpace: string;
-  freeSpace: string;
-  usedSpace: string;
-}
-
 const DocumentScreen = () => {
-  const [currentPath, setCurrentPath] = useState<string>(FileSystem.documentDirectory || '');
+  const [currentPath, setCurrentPath] = useState<string>(RNFS.ExternalStorageDirectoryPath);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [pathHistory, setPathHistory] = useState<string[]>([]);
-  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
 
-  // Fonction pour convertir les bytes en format lisible
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
-
-  // Fonction pour obtenir les informations de stockage
-  const getStorageInfo = async () => {
-    try {
-      const totalSpace = await FileSystem.getTotalDiskCapacityAsync();
-      const freeSpace = await FileSystem.getFreeDiskStorageAsync();
-      const usedSpace = totalSpace - freeSpace;
-
-      setStorageInfo({
-        totalSpace: formatBytes(totalSpace),
-        freeSpace: formatBytes(freeSpace),
-        usedSpace: formatBytes(usedSpace)
-      });
-    } catch (error) {
-      console.error('Erreur lors de la récupération des informations de stockage:', error);
+  // Fonction pour demander la permission sur Android
+  const requestPermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          {
+            title: 'Permission d\'accès au stockage',
+            message: 'Cette application a besoin d\'accéder aux fichiers de votre téléphone.',
+            buttonNeutral: 'Demander plus tard',
+            buttonNegative: 'Refuser',
+            buttonPositive: 'Accepter',
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.warn(err);
+        return false;
+      }
     }
+    return true;
   };
 
+  // Fonction pour charger les fichiers du dossier actuel
   const loadFiles = async (path: string) => {
     try {
-      const result = await FileSystem.readDirectoryAsync(path);
-      const formattedFiles: FileItem[] = await Promise.all(
-        result.map(async (name) => {
-          const fullPath = path + (path.endsWith('/') ? '' : '/') + name;
-          const info = await FileSystem.getInfoAsync(fullPath);
-          return {
-            name,
-            path: fullPath,
-            isDirectory: info.isDirectory || false,
-            size: info.size || 0
-          };
-        })
-      );
+      const results = await RNFS.readDir(path);
+      const formattedFiles: FileItem[] = results.map((file) => ({
+        name: file.name,
+        path: file.path,
+        isDirectory: file.isDirectory(),
+        size: file.size || 0,
+      }));
       setFiles(formattedFiles);
     } catch (error) {
       Alert.alert('Erreur', "Impossible d'accéder à ce dossier");
@@ -79,8 +64,14 @@ const DocumentScreen = () => {
   };
 
   useEffect(() => {
-    loadFiles(currentPath);
-    getStorageInfo();
+    (async () => {
+      const hasPermission = await requestPermission();
+      if (hasPermission) {
+        loadFiles(currentPath);
+      } else {
+        Alert.alert("Permission refusée", "L'accès aux fichiers est requis.");
+      }
+    })();
   }, [currentPath]);
 
   const handlePress = async (item: FileItem) => {
@@ -103,11 +94,16 @@ const DocumentScreen = () => {
     }
   };
 
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  };
+
   const renderItem = ({ item }: { item: FileItem }) => (
-    <TouchableOpacity
-      style={styles.fileItem}
-      onPress={() => handlePress(item)}
-    >
+    <TouchableOpacity style={styles.fileItem} onPress={() => handlePress(item)}>
       <Ionicons
         name={item.isDirectory ? 'folder' : 'document'}
         size={24}
@@ -115,25 +111,13 @@ const DocumentScreen = () => {
       />
       <View style={styles.fileInfo}>
         <Text style={styles.fileName}>{item.name}</Text>
-        {!item.isDirectory && (
-          <Text style={styles.fileSize}>{formatBytes(item.size || 0)}</Text>
-        )}
+        {!item.isDirectory && <Text style={styles.fileSize}>{formatBytes(item.size || 0)}</Text>}
       </View>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      {/* Informations de stockage */}
-      {storageInfo && (
-        <View style={styles.storageInfo}>
-          <Text style={styles.storageTitle}>Informations de stockage :</Text>
-          <Text>Espace total : {storageInfo.totalSpace}</Text>
-          <Text>Espace libre : {storageInfo.freeSpace}</Text>
-          <Text>Espace utilisé : {storageInfo.usedSpace}</Text>
-        </View>
-      )}
-
       {pathHistory.length > 0 && (
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="arrow-back" size={24} color="#000" />
@@ -159,16 +143,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  storageInfo: {
-    padding: 15,
-    backgroundColor: '#f5f5f5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  storageTitle: {
-    fontWeight: 'bold',
-    marginBottom: 5,
   },
   backButton: {
     flexDirection: 'row',
